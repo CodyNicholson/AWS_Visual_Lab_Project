@@ -1,0 +1,193 @@
+import { BUDGET_ALARMS, DEFAULT_BUDGET, DEFAULT_REPO, REWRITE_SOURCE, TRIGGERS, budget, deployCache, hosting, oidc } from '../../lab/hosting.js';
+import { SOURCES, excerpt } from '../../kb/repo.js';
+
+const CATEGORY = 'Hosting and delivery';
+
+export default [
+  {
+    id: 's3-cloudfront',
+    category: CATEGORY,
+    title: 'Private S3 + CloudFront (OAC)',
+    tagline: 'The bucket is never public; only the CDN can read it',
+    description: [
+      'The KB is a static Astro site served from S3 behind CloudFront: cheap, fast, and a worked example of a common mistake, because the bucket is never public. SiteStack blocks all public access, enforces TLS, and lets only the CloudFront distribution read objects through origin access control (OAC), which signs each origin request.',
+      'Enter a path and send it. The steps show the viewer-request function rewriting /concepts/x/ to /concepts/x/index.html (S3 REST origins don’t add index.html), the signed request to S3, the security headers added on the way back, and what happens for a missing page: with OAC, S3 answers 403, which CloudFront turns into the site’s 404 page.',
+      'Requests straight to the bucket are refused. Turn the rewrite off to see why it exists, or try a public website bucket to see what it bypasses: HTTPS, the CDN and every security header.',
+    ],
+    keyApis: ['S3BucketOrigin.withOriginAccessControl', 'BlockPublicAccess.BLOCK_ALL', 'cloudfront.Function (viewer-request)', 'errorResponses 403/404'],
+    useCases: ['Static sites and SPAs', 'Private origins behind a CDN'],
+    snippet: { lang: 'js', name: 'infra/lib/site-stack.ts: IndexRewrite (CloudFront Function)', code: REWRITE_SOURCE },
+    inputs: [
+      { name: 'path', label: 'Path', type: 'text', default: '/concepts/compute-and-containers/lambda' },
+      { name: 'via', label: 'Request', type: 'select', default: 'CloudFront', options: ['CloudFront', 'S3 bucket URL directly'] },
+      { name: 'rewrite', label: 'IndexRewrite function', type: 'checkbox', default: true },
+    ],
+    flow: [
+      ['dev', 'cf', 'GET /concepts/…/lambda'],
+      ['cf', 'cf', 'IndexRewrite → …/lambda/index.html'],
+      ['cf', 's3', 'GetObject signed by OAC'],
+      ['s3', 'cf', '200 (or 403 if missing)'],
+      ['cf', 'dev', 'page + HSTS, nosniff, DENY'],
+    ],
+    actions: [
+      { id: 'run', label: 'Request the page', tone: 'accent', run: (i) => hosting(i) },
+      { id: 'no-rewrite', label: 'Do it wrong: no rewrite function', tone: 'ghost', run: (i) => hosting(i, { noRewrite: true }) },
+      { id: 'public', label: 'Do it wrong: public website bucket', tone: 'ghost', run: (i) => hosting(i, { publicBucket: true }), flow: () => [['dev', 's3', 'GET http://bucket.s3-website…'], ['s3', 'dev', '200, no HTTPS, no headers, no CDN']] },
+    ],
+    pitfalls: [
+      {
+        mistake: 'Making the bucket public to serve a website',
+        symptom: 'The site works, but anyone can read every object directly over plain HTTP, skipping the CDN, HTTPS and the security headers.',
+        why: 'S3 website hosting needs a public bucket; tutorials stop there.',
+        fix: 'Turn on Block Public Access, remove the bucket policy, and serve through CloudFront with origin access control.',
+        avoid: 'Use SiteStack’s pattern: BLOCK_ALL, enforceSSL, OAC, and a response headers policy.',
+        source: { title: 'infra/lib/site-stack.ts', file: 'infra/lib/site-stack.ts' },
+        reproduce: 'public',
+      },
+      {
+        mistake: 'Directory URLs without an index rewrite',
+        symptom: '/concepts/ and /concepts/x/ show the 404 page although index.html exists in the bucket.',
+        why: 'defaultRootObject only applies to "/"; S3 REST origins don’t map folders to index.html. With OAC a missing key comes back as 403.',
+        fix: 'Add a viewer-request CloudFront Function that appends index.html, and map 403 and 404 to the 404 page.',
+        avoid: 'Test a nested URL, not just the home page, after every hosting change.',
+        source: { title: 'infra/lib/site-stack.ts', file: 'infra/lib/site-stack.ts' },
+        reproduce: 'no-rewrite',
+      },
+    ],
+    visual: 'cloudfront',
+    test: { action: 'run' },
+  },
+  {
+    id: 'github-oidc',
+    category: CATEGORY,
+    title: 'GitHub Actions with OIDC',
+    tagline: 'No AWS keys in the repo: each role trusts one environment of one repository',
+    description: [
+      'GitHub Actions assumes an IAM role through OpenID Connect, so no AWS keys are stored anywhere. GitHub issues the job a short-lived token whose sub claim names the repository and the environment; the role’s trust policy only accepts that exact value.',
+      'Pick what is running. The lab builds the token claims and tries AssumeRoleWithWebIdentity against both roles from GithubOidcStack: SiteDeployRole (S3 sync + CloudFront invalidation, environment production) and SamplesTestRole (deploys the sample stacks, environment sandbox). Sessions last at most one hour.',
+      'A pull request run gets no role, and neither does another repository. Loosen the trust to repo:* and any repository on GitHub can deploy your site.',
+    ],
+    keyApis: ['token.actions.githubusercontent.com', 'aud: sts.amazonaws.com', 'sub: repo:OWNER/REPO:environment:ENV', 'id-token: write'],
+    useCases: ['CI/CD without stored keys', 'Separating deploy and test permissions'],
+    snippet: { lang: 'ts', name: 'infra/lib/github-oidc-stack.ts', code: excerpt(SOURCES.oidcStack, 'const trust = (environment: string) =>', '});') },
+    inputs: [
+      { name: 'trigger', label: 'What is running', type: 'select', default: TRIGGERS[0], options: TRIGGERS },
+      { name: 'repo', label: 'Repository', type: 'text', default: DEFAULT_REPO },
+    ],
+    flow: [
+      ['gh', 'gh', 'job gets an OIDC token'],
+      ['gh', 'sts', 'AssumeRoleWithWebIdentity'],
+      ['sts', 'sts', 'trust: aud + sub StringEquals'],
+      ['sts', 'gh', '1-hour credentials'],
+      ['gh', 's3', 'aws s3 sync'],
+    ],
+    actions: [
+      { id: 'run', label: 'Request credentials', tone: 'accent', run: (i) => oidc(i) },
+      { id: 'loose', label: 'Do it wrong: trust repo:*', tone: 'ghost', run: (i) => oidc(i, { looseTrust: true }) },
+    ],
+    pitfalls: [
+      {
+        mistake: 'A trust policy that matches any repository',
+        symptom: 'Any GitHub repository can assume the role (sub: repo:someone-else/other-repo:… matches repo:*).',
+        why: 'StringLike with a wildcard sub, or no sub condition at all, trusts every token GitHub issues.',
+        fix: 'Use StringEquals on sub with repo:OWNER/REPO:environment:ENV (and aud sts.amazonaws.com).',
+        avoid: 'Bind each role to one GitHub environment with required reviewers, as GithubOidcStack does.',
+        source: { title: 'infra/lib/github-oidc-stack.ts', file: 'infra/lib/github-oidc-stack.ts' },
+        reproduce: 'loose',
+      },
+      {
+        mistake: 'Workflow can’t get credentials',
+        symptom: 'Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity',
+        why: 'The token’s sub doesn’t match the trust policy (wrong environment, a pull_request run, a renamed repo) or the job lacks permissions: id-token: write.',
+        fix: 'Add id-token: write, run the job in the environment the role trusts, and compare the sub claim with the trust policy.',
+        avoid: 'Keep the environment name in one place and test the deploy role from a dry-run job.',
+        source: { title: '.github/workflows/deploy.yml', file: '.github/workflows/deploy.yml' },
+      },
+    ],
+    visual: 'oidc',
+    test: { action: 'run' },
+  },
+  {
+    id: 'deploy-caching',
+    category: CATEGORY,
+    title: 'Deploys and caching',
+    tagline: 'Hashed assets cached for a year, pages for 5 minutes, old assets kept',
+    description: [
+      'The deploy workflow syncs the built site to S3 in two passes. Fingerprinted assets in _astro/ never change, so they are cached for a year as immutable. Pages and the search index must update promptly, so they get max-age=300 and must-revalidate. Then CloudFront is invalidated.',
+      'Old assets are excluded from --delete, so a tab opened before the deploy can still lazy-load the chunk its HTML references. Press the button to replay a deploy around an open tab; then try deleting everything to see the tab break.',
+      'The values come from .github/workflows/deploy.yml.',
+    ],
+    keyApis: ['aws s3 sync --delete --exclude', 'Cache-Control immutable', 'max-age=300, must-revalidate', 'create-invalidation'],
+    useCases: ['Static site deploys', 'SPA releases without broken tabs'],
+    snippet: { lang: 'yaml', name: '.github/workflows/deploy.yml', code: excerpt(SOURCES.deployYml, '- name: Upload to S3', 'create-invalidation') },
+    inputs: [
+      { name: 'tabAgeMin', label: 'Tab opened (min before deploy)', type: 'number', default: 30, min: 0, max: 240 },
+      { name: 'htmlCachedAgoMin', label: 'HTML cached (min before deploy)', type: 'number', default: 2, min: 0, max: 30 },
+    ],
+    flow: [
+      ['gh', 's3', 'sync _astro/ (immutable, 1 year)'],
+      ['gh', 's3', 'sync pages --delete --exclude _astro/*'],
+      ['gh', 'cf', 'create-invalidation /*'],
+      ['dev', 'cf', 'open tab loads an old chunk → 200'],
+    ],
+    actions: [
+      { id: 'run', label: 'Replay a deploy', tone: 'accent', run: (i) => deployCache(i) },
+      { id: 'delete', label: 'Do it wrong: --delete old assets', tone: 'ghost', run: (i) => deployCache(i, { deleteAssets: true }) },
+    ],
+    pitfalls: [
+      {
+        mistake: 'Deleting old hashed assets on every deploy',
+        symptom: 'TypeError: Failed to fetch dynamically imported module: …/_astro/….js in tabs opened before the deploy.',
+        why: 'The old HTML still references the old chunk names, and those files are gone.',
+        fix: 'Exclude the asset folder from --delete (expire old assets later with a lifecycle rule or a cleanup job).',
+        avoid: 'Upload assets first, pages second, and never delete what an open page may still request.',
+        source: { title: '.github/workflows/deploy.yml', file: '.github/workflows/deploy.yml' },
+        reproduce: 'delete',
+      },
+    ],
+    visual: 'deployCache',
+    test: { action: 'run' },
+  },
+  {
+    id: 'sandbox-budget',
+    category: CATEGORY,
+    title: 'Sandbox budget alarms',
+    tagline: `Emails at 50% and 100% of actual spend and 100% of forecast (default $${DEFAULT_BUDGET}/month)`,
+    description: [
+      'Code samples and labs are deployed for real, in a separate sandbox account. SandboxBudgetStack puts an AWS Budgets monthly cost budget on it with three email alerts: actual spend above 50%, actual above 100%, and forecasted spend above 100%.',
+      'Set a daily spend and a one-off spike (a forgotten NAT gateway, a recursive loop) and play the month. The chart shows actual and forecast spend against the budget line and marks the day each alarm fires. The forecast here is a simple linear projection; AWS’s is more sophisticated, but the point stands: it warns before the money is gone.',
+      `Alarm thresholds are read from infra/lib/sandbox-budget-stack.ts: ${BUDGET_ALARMS.map((a) => `${a.type} ${a.threshold}%`).join(', ')}.`,
+    ],
+    keyApis: ['AWS::Budgets::Budget', "notificationType: 'ACTUAL' | 'FORECASTED'", 'threshold (%)'],
+    useCases: ['Sandbox and lab accounts', 'Catching runaway resources early'],
+    snippet: { lang: 'ts', name: 'infra/lib/sandbox-budget-stack.ts', code: excerpt(SOURCES.budgetStack, 'notificationsWithSubscribers', '],') },
+    inputs: [
+      { name: 'budgetUsd', label: 'Budget ($/month)', type: 'number', default: DEFAULT_BUDGET, min: 1, max: 1000 },
+      { name: 'dailyUsd', label: 'Daily spend ($)', type: 'number', default: 0.5, min: 0, max: 100, step: 0.1 },
+      { name: 'spikeDay', label: 'Spike on day (0 = none)', type: 'number', default: 8, min: 0, max: 30 },
+      { name: 'spikeUsd', label: 'Spike ($)', type: 'number', default: 15, min: 0, max: 1000 },
+    ],
+    flow: [
+      ['lambda', 'cw', 'usage → billing data'],
+      ['cw', 'cw', 'actual vs forecast vs thresholds'],
+      ['cw', 'dev', 'email alert'],
+    ],
+    actions: [
+      { id: 'run', label: 'Play the month', tone: 'accent', run: (i) => budget(i) },
+      { id: 'actual-only', label: 'Do it wrong: only an ACTUAL 100% alarm', tone: 'ghost', run: (i) => budget(i, { onlyActual: true }) },
+    ],
+    pitfalls: [
+      {
+        mistake: 'Only alerting when actual spend passes the budget',
+        symptom: 'The first email arrives after the money is spent.',
+        why: 'Actual-spend alarms trail reality; a spike early in the month shows up in the forecast days earlier.',
+        fix: 'Add a FORECASTED 100% alert and an early ACTUAL alert (50%).',
+        avoid: 'Put budgets in IaC for every sandbox account, as the repo does.',
+        source: { title: 'infra/lib/sandbox-budget-stack.ts', file: 'infra/lib/sandbox-budget-stack.ts' },
+        reproduce: 'actual-only',
+      },
+    ],
+    visual: 'budget',
+    test: { action: 'run' },
+  },
+];

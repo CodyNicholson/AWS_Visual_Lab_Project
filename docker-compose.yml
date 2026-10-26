@@ -1,0 +1,40 @@
+# AWS Visual Lab: a browser-only React app that explains everything in this repository. There is no
+# backend: one nginx container serves the built app, and every demo runs in the visitor's page.
+# Secrets and the host port live in the git-ignored .env next to this file (see .env.example).
+services:
+  # Production build served by unprivileged nginx on :80. The container name and tunnel-net match
+  # the Cloudflare tunnel route (http://rixus-frontend:80), so pipeline-run.sh can publish it.
+  frontend:
+    build:
+      # The repo root, so the build can read content/, samples/, infra/ and the workflows it explains.
+      # .dockerignore keeps .env, logs and everything else out of the build context.
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: runtime
+    container_name: rixus-frontend
+    ports:
+      # Localhost only: Docker's iptables rules bypass ufw, so a port without 127.0.0.1 would be public.
+      # FRONTEND_HOST_PORT comes from .env; left empty, Docker picks a free localhost port.
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-}:80"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 100
+    networks:
+      - tunnel-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  tunnel-net:
+    external: true

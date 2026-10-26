@@ -1,0 +1,19 @@
+# Allowlist: the frontend build only needs the app and the repository content it explains.
+# Everything else (.env, claude_logs/, pipeline-run.sh, node_modules, build output) stays out.
+*
+!frontend/
+frontend/node_modules
+frontend/dist
+!content/
+!samples/concepts/
+!infra/lib/
+!infra/bin/
+!site/src/data/
+!site/src/lib/
+!site/src/islands/types.ts
+!scripts/
+!.github/workflows/
+**/node_modules
+**/__pycache__
+**/.env
+**/.env.*
