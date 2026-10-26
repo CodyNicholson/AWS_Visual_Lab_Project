@@ -1,0 +1,95 @@
+---
+// Tabbed code samples read straight from samples/concepts/, the same files CI tests.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Code } from 'astro:components';
+import { SAMPLES_DIR } from '../lib/paths';
+
+interface Tab {
+  label: string;
+  /** Path relative to samples/concepts/, e.g. "lambda/python/order_worker/handler.py" */
+  path: string;
+}
+interface Props {
+  tabs: Tab[];
+  caption?: string;
+}
+
+const { tabs, caption } = Astro.props;
+const LANGS: Record<string, string> = { py: 'python', ts: 'typescript', js: 'javascript', json: 'json', yaml: 'yaml', yml: 'yaml', sh: 'bash' };
+const panels = tabs.map((tab, i) => {
+  const ext = tab.path.split('.').pop() ?? '';
+  return {
+    ...tab,
+    id: `${tab.path.replace(/[^a-z0-9]+/gi, '-')}-${i}`,
+    lang: LANGS[ext] ?? 'text',
+    code: readFileSync(resolve(SAMPLES_DIR, tab.path), 'utf8').trimEnd(),
+  };
+});
+---
+
+<div class="code-tabs not-prose my-6 rounded-lg border border-slate-200 dark:border-slate-800">
+  <div class="flex flex-wrap items-center gap-1 border-b border-slate-200 px-2 pt-2 dark:border-slate-800" role="tablist" aria-label={caption ?? 'Code samples'}>
+    {
+      panels.map((p, i) => (
+        <button
+          type="button"
+          role="tab"
+          id={`tab-${p.id}`}
+          aria-controls={`panel-${p.id}`}
+          aria-selected={i === 0 ? 'true' : 'false'}
+          tabindex={i === 0 ? 0 : -1}
+          class="rounded-t-md px-3 py-1.5 text-sm text-slate-600 aria-selected:bg-slate-100 aria-selected:font-semibold aria-selected:text-slate-900 dark:text-slate-400 dark:aria-selected:bg-ink-800 dark:aria-selected:text-white"
+        >
+          {p.label}
+        </button>
+      ))
+    }
+    <button type="button" class="copy-btn ml-auto mb-1 rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-700">Copy</button>
+  </div>
+  {
+    panels.map((p, i) => (
+      <div role="tabpanel" id={`panel-${p.id}`} aria-labelledby={`tab-${p.id}`} hidden={i !== 0} data-code={p.code}>
+        <Code code={p.code} lang={p.lang as any} themes={{ light: 'github-light', dark: 'github-dark' }} class="!rounded-none !rounded-b-lg" />
+        <p class="px-4 pb-2 pt-1 font-mono text-xs text-slate-500 dark:text-slate-400">samples/concepts/{p.path}</p>
+      </div>
+    ))
+  }
+  {caption && <p class="border-t border-slate-200 px-4 py-2 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400">{caption}</p>}
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.code-tabs').forEach((root) => {
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role=tab]'));
+    const select = (tab: HTMLButtonElement) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        root.querySelector<HTMLElement>(`#${t.getAttribute('aria-controls')}`)!.hidden = !on;
+      }
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(tab));
+      tab.addEventListener('keydown', (e) => {
+        const next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : null;
+        if (next === null) return;
+        e.preventDefault();
+        const target = tabs[(next + tabs.length) % tabs.length];
+        select(target);
+        target.focus();
+      });
+    });
+    const copy = root.querySelector<HTMLButtonElement>('.copy-btn')!;
+    copy.addEventListener('click', async () => {
+      const panel = root.querySelector<HTMLElement>('[role=tabpanel]:not([hidden])')!;
+      try {
+        await navigator.clipboard.writeText(panel.dataset.code ?? '');
+        copy.textContent = 'Copied';
+      } catch {
+        copy.textContent = 'Copy failed';
+      }
+      setTimeout(() => (copy.textContent = 'Copy'), 1500);
+    });
+  });
+</script>

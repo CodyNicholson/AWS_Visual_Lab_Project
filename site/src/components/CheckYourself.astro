@@ -1,0 +1,19 @@
+---
+import Quiz from '../islands/Quiz';
+import { getQuestions } from '../lib/content';
+
+interface Props {
+  service: string;
+  count?: number;
+}
+const { service, count = 5 } = Astro.props;
+const questions = (await getQuestions()).filter((q) => q.services.includes(service)).slice(0, count);
+if (questions.length < 3) throw new Error(`CheckYourself: service "${service}" has ${questions.length} questions; the template needs 3-5`);
+---
+
+<div class="not-prose my-6">
+  <Quiz client:visible questions={questions} />
+  <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+    Want more? Every question tagged with this service is in the <a class="underline" href={`/exams/${questions[0].exam.toLowerCase()}/practice/`}>practice exam</a>.
+  </p>
+</div>

@@ -1,0 +1,74 @@
+name: Freshness
+
+# Weekly: diff the official exam guides and list pages past their 90-day review.
+# A changed exam guide opens a pull request that updates the stored snapshot, with the diff in
+# the description. Stale pages open (or update) one tracking issue.
+# Needs "Allow GitHub Actions to create and approve pull requests" in the repo's Actions settings.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1' # Mondays 07:00 UTC
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  exam-guides:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - id: diff
+        run: npm run exam-guide-diff
+      - name: Open a pull request with the updated snapshot
+        if: steps.diff.outputs.snapshot_updated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGED: ${{ steps.diff.outputs.changed }}
+        run: |
+          branch="freshness/exam-guides-$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add content/exams/*/guide-snapshot.md
+          git commit -m "Update exam guide snapshots"
+          git push -u origin "$branch"
+          if [ "$CHANGED" = "true" ]; then
+            body="exam-guide-diff.md"
+            title="Exam guide changed: review objectives.yaml and tagged pages"
+          else
+            echo "First snapshot of the exam guides; nothing to compare yet." > first.md
+            body="first.md"
+            title="Add first exam guide snapshots"
+          fi
+          gh pr create --title "$title" --body-file "$body" --base main --head "$branch"
+
+  stale-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/stale-pages.ts > stale.md
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -q '^| ' stale.md || { echo "No stale pages."; exit 0; }
+          title="Pages due for review (last verified over 90 days ago)"
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file stale.md
+          else
+            gh issue create --title "$title" --body-file stale.md
+          fi

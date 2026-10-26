@@ -1,0 +1,28 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EmptyState from '../../components/EmptyState.astro';
+
+const studies = await getCollection('caseStudies');
+---
+
+<BaseLayout title="Case studies" description="End-to-end scenarios that combine several services, with decisions and trade-offs.">
+  <h1 class="text-2xl font-bold">Case studies</h1>
+  <p class="mt-2 text-slate-600 dark:text-slate-300">End-to-end scenarios with architecture, a decision log, what went wrong, cost, and exam-style questions.</p>
+  {
+    studies.length ? (
+      <ul class="mt-6 space-y-3">
+        {studies.map((s) => (
+          <li>
+            <a class="font-semibold underline" href={`/case-studies/${s.id}/`}>{s.data.title}</a>
+            <p class="text-sm text-slate-600 dark:text-slate-400">{s.data.summary}</p>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <EmptyState title="First case studies in progress">
+        Serverless order API and event-driven image pipeline are next, each with reference code and a CDK deployment.
+      </EmptyState>
+    )
+  }
+</BaseLayout>

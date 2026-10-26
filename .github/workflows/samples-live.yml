@@ -1,0 +1,43 @@
+name: Samples (live)
+
+# Deploys every sample stack to the sandbox account, runs the live tests, and always tears down.
+# The sandbox account needs `cdk bootstrap`, the AwsDevKb-GithubOidc stack and a budget alarm
+# (AwsDevKb-SandboxBudget). Set the repository variable AWS_SAMPLES_ROLE_ARN to enable it.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: samples-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    if: vars.AWS_SAMPLES_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    environment: sandbox
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_SAMPLES_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - name: Deploy sample stacks
+        run: npm run deploy -w samples
+      - name: Live tests
+        run: npm run test:live -w samples
+      - name: Destroy sample stacks
+        if: always()
+        run: npm run destroy -w samples

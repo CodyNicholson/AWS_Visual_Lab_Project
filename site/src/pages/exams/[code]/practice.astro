@@ -1,0 +1,35 @@
+---
+import { getCollection, getEntry, type CollectionEntry } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PracticeExam from '../../../islands/PracticeExam';
+import { getQuestions } from '../../../lib/content';
+
+export async function getStaticPaths() {
+  return (await getCollection('exams')).map((exam) => ({ params: { code: exam.id }, props: { exam } }));
+}
+
+const { exam } = Astro.props as { exam: CollectionEntry<'exams'> };
+const e = exam.data;
+const objectives = (await getEntry('objectives', exam.id))!.data;
+const questions = await getQuestions(e.code);
+const info = {
+  code: e.code,
+  durationMinutes: e.format.duration_minutes,
+  questionsTotal: e.format.questions_total,
+  domains: objectives.domains.map(({ id, number, name, weight }) => ({ id, number, name, weight })),
+};
+---
+
+<BaseLayout title={`${e.code} practice`} description={`Practice questions for ${e.name}.`}>
+  <nav aria-label="Breadcrumb" class="text-sm text-slate-500">
+    <a href={`/exams/${exam.id}/`} class="underline">{e.code}</a> / Practice
+  </nav>
+  <h1 class="mt-2 text-2xl font-bold">{e.code} practice</h1>
+  <p class="mt-2 text-slate-600 dark:text-slate-300">
+    Original questions written for this KB. Every answer, right or wrong, comes with the reason. Your answers stay in
+    this browser tab; sign-in and progress sync arrive in Phase 2.
+  </p>
+  <div class="mt-6">
+    <PracticeExam client:load exam={info} questions={questions} />
+  </div>
+</BaseLayout>

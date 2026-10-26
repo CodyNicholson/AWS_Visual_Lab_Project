@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MistakesFilter, { type MistakeRow } from '../islands/MistakesFilter';
+import { conceptHref, getConcepts } from '../lib/content';
+
+const rank = { high: 0, medium: 1, low: 2 };
+const rows: MistakeRow[] = (await getConcepts())
+  .flatMap((c) =>
+    c.data.mistakes.map((m) => ({ ...m, service: c.data.service, serviceTitle: c.data.title, href: `${conceptHref(c)}#common-mistakes` })),
+  )
+  .sort((a, b) => rank[a.severity] - rank[b.severity] || a.serviceTitle.localeCompare(b.serviceTitle));
+---
+
+<BaseLayout title="Common mistakes" description="Every common-mistake row across the KB, filterable by service and severity." searchable>
+  <h1 class="text-2xl font-bold">Common mistakes</h1>
+  <p class="mt-2 text-slate-600 dark:text-slate-300">
+    Every mistake from every concept page, each with the symptom you see, why it happens, the fix and its source.
+  </p>
+  <div class="mt-6">
+    <MistakesFilter client:load rows={rows} />
+  </div>
+</BaseLayout>

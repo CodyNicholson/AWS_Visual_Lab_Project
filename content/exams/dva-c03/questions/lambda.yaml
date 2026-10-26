@@ -1,0 +1,288 @@
+# Original questions written for this KB (see docs/question-policy.md). Never copy live exam content.
+# Task statement IDs (tasks:) are added when the DVA-C03 exam guide publishes on Oct 27, 2026.
+exam: DVA-C03
+questions:
+  - id: lambda-001
+    type: single
+    difficulty: medium
+    services: [lambda, sqs]
+    exam_domains: [DVA-C03-D1]
+    stem: >-
+      A Lambda function processes messages from an SQS standard queue. The function timeout is 60 seconds and the
+      queue's visibility timeout is 70 seconds. During traffic spikes the function is throttled, and the team sees
+      some orders processed twice. Which change most directly addresses the duplicates?
+    options:
+      - id: a
+        text: Raise the queue's visibility timeout to at least 360 seconds and make the handler idempotent.
+        correct: true
+        why: >-
+          AWS recommends a visibility timeout of at least six times the function timeout, so a throttled batch can be
+          retried before its messages reappear. Idempotency handles the duplicates that at-least-once delivery can
+          still produce.
+      - id: b
+        text: Lower the function timeout to 30 seconds so it always finishes before the visibility timeout.
+        why: >-
+          A shorter timeout doesn't leave room for Lambda to retry a throttled batch, and it risks cutting off normal
+          invocations.
+      - id: c
+        text: Switch to an SQS FIFO queue to guarantee exactly-once processing in Lambda.
+        why: >-
+          FIFO deduplicates sends within a 5-minute window, but a message whose visibility timeout runs out during
+          processing is still delivered again. The handler still has to be idempotent.
+      - id: d
+        text: Increase the function's memory so each batch runs faster.
+        why: Faster runs help a little, but the duplicates come from throttling and the visibility window, not speed.
+    explanation: >-
+      With an SQS event source, a message becomes visible again when its visibility timeout ends. Six times the
+      function timeout (plus any batching window) gives Lambda room to retry throttled batches.
+    sources:
+      - title: Configuring a queue to use with Lambda
+        url: https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html
+
+  - id: lambda-002
+    type: multiple
+    difficulty: medium
+    services: [lambda, sqs]
+    exam_domains: [DVA-C03-D1, DVA-C03-D4]
+    stem: >-
+      A function receives SQS messages in batches of 10. When one message in a batch has malformed JSON, all 10
+      messages are processed again, and the bad message keeps coming back. Which TWO changes fix this?
+    options:
+      - id: a
+        text: >-
+          Turn on ReportBatchItemFailures for the event source mapping and return the failed message IDs in
+          batchItemFailures.
+        correct: true
+        why: Only the failed messages become visible again; the nine good ones are deleted from the queue.
+      - id: b
+        text: Configure a redrive policy on the source queue with a dead-letter queue and a maxReceiveCount.
+        correct: true
+        why: After the configured number of receives, SQS moves the poison message to the dead-letter queue.
+      - id: c
+        text: Throw an exception from the handler as soon as any message fails.
+        why: >-
+          With partial batch responses on, an exception still marks the entire batch as failed. Catch per record
+          instead.
+      - id: d
+        text: Configure a dead-letter queue on the Lambda function itself.
+        why: >-
+          A function's dead-letter queue is for its asynchronous invocation queue. For an SQS event source, the
+          dead-letter queue belongs on the source queue.
+      - id: e
+        text: Enable provisioned concurrency on the function.
+        why: Provisioned concurrency reduces cold starts; it doesn't change how failed batches are retried.
+    explanation: >-
+      Partial batch responses stop good messages from being reprocessed, and a redrive policy on the source queue
+      moves a message that keeps failing out of the way.
+    sources:
+      - title: Handling errors for an SQS event source in Lambda
+        url: https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-errorhandling.html
+      - title: Use Lambda recursive loop detection (note on where to configure the DLQ)
+        url: https://docs.aws.amazon.com/lambda/latest/dg/invocation-recursion.html
+
+  - id: lambda-003
+    type: single
+    difficulty: medium
+    services: [lambda, privatelink, dynamodb]
+    exam_domains: [DVA-C03-D4]
+    stem: >-
+      A developer attaches an existing Lambda function to private subnets in a VPC so it can reach an RDS database.
+      The database calls work, but every call to DynamoDB now fails with "Task timed out after 3.00 seconds". The VPC
+      has no NAT gateway. What is the most cost-effective fix?
+    options:
+      - id: a
+        text: Add a DynamoDB gateway VPC endpoint to the route tables of the function's subnets.
+        correct: true
+        why: The function gets a private route to DynamoDB, and gateway endpoints have no extra charge.
+      - id: b
+        text: Move the function to a public subnet.
+        why: Connecting a Lambda function to a public subnet doesn't give it internet access.
+      - id: c
+        text: Increase the function timeout to 900 seconds.
+        why: There is no route to DynamoDB, so the call never completes; it just times out later.
+      - id: d
+        text: Add AmazonDynamoDBFullAccess to the execution role.
+        why: Missing permissions return AccessDeniedException quickly. A hang until timeout points to networking.
+    explanation: >-
+      A VPC-attached function can only reach what the VPC can reach. A gateway endpoint (S3, DynamoDB) or an interface
+      endpoint gives private access to AWS APIs; a NAT gateway also works but costs more.
+    sources:
+      - title: Enable internet access for VPC-connected Lambda functions
+        url: https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc-internet.html
+
+  - id: lambda-004
+    type: single
+    difficulty: easy
+    services: [lambda]
+    exam_domains: [DVA-C03-D4]
+    stem: >-
+      A latency-sensitive API backed by Lambda is usually fast, but the first requests after a quiet period take
+      several seconds. Which setting removes this delay?
+    options:
+      - id: a
+        text: Provisioned concurrency on the alias that API Gateway invokes.
+        correct: true
+        why: Lambda keeps that many execution environments initialized, so requests skip the Init phase.
+      - id: b
+        text: Reserved concurrency on the function.
+        why: Reserved concurrency guarantees and caps capacity, but its environments aren't pre-initialized.
+      - id: c
+        text: A longer function timeout.
+        why: The timeout limits how long an invocation may run; it doesn't affect initialization.
+      - id: d
+        text: Asynchronous invocation from API Gateway.
+        why: The client would no longer get the response, and cold starts would still happen.
+    explanation: >-
+      Slow first requests after idle time are cold starts. Provisioned concurrency pre-initializes environments, at
+      extra cost.
+    sources:
+      - title: Understanding reserved concurrency and provisioned concurrency
+        url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html
+
+  - id: lambda-005
+    type: single
+    difficulty: easy
+    services: [lambda]
+    exam_domains: [DVA-C03-D1]
+    stem: >-
+      A function's average duration is 200 ms. At peak it receives 4,000 requests per second. About how much
+      concurrency does it need at peak?
+    options:
+      - id: a
+        text: '800'
+        correct: true
+        why: Concurrency = requests per second × duration in seconds = 4,000 × 0.2 = 800.
+      - id: b
+        text: '20'
+        why: This divides duration by requests instead of multiplying requests by duration.
+      - id: c
+        text: '4,000'
+        why: That would only be true if each request took a full second.
+      - id: d
+        text: '20,000'
+        why: This divides requests by duration (4,000 / 0.2) instead of multiplying.
+    explanation: >-
+      800 fits within the default Regional quota of 1,000 concurrent executions, but it leaves little headroom for
+      other functions in the account.
+    sources:
+      - title: Calculating concurrency for a function
+        url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html
+
+  - id: lambda-006
+    type: single
+    difficulty: easy
+    services: [lambda, dynamodb]
+    exam_domains: [DVA-C03-D4]
+    stem: >-
+      Profiling shows that each invocation of a DynamoDB-writing function spends 40 ms creating an SDK client and
+      opening a connection before doing any work. What is the best fix?
+    options:
+      - id: a
+        text: Create the SDK client outside the handler, at module scope.
+        correct: true
+        why: Code outside the handler runs once per execution environment, so warm invocations reuse the client.
+      - id: b
+        text: Increase memory to 10,240 MB.
+        why: More CPU may shave a little off, but the client is still rebuilt on every invocation.
+      - id: c
+        text: Store the client in /tmp between invocations.
+        why: /tmp holds files, not live objects; you'd still have to rebuild the client.
+      - id: d
+        text: Enable provisioned concurrency.
+        why: That pre-runs Init, but this cost is inside the handler, so it is still paid on every invocation.
+    explanation: >-
+      Initializing SDK clients and connections outside the handler is one of AWS's core Lambda best practices.
+    sources:
+      - title: Best practices — take advantage of execution environment reuse
+        url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+
+  - id: lambda-007
+    type: single
+    difficulty: easy
+    services: [lambda, iam]
+    exam_domains: [DVA-C03-D2]
+    stem: A Lambda function needs to read items from one DynamoDB table. How should the developer grant access?
+    options:
+      - id: a
+        text: >-
+          Attach a policy to the function's execution role that allows dynamodb:GetItem on that table's ARN.
+        correct: true
+        why: The execution role gives the function temporary credentials, scoped to exactly what it needs.
+      - id: b
+        text: Create an IAM user and put its access keys in the function's environment variables.
+        why: Long-lived keys can leak and are hard to rotate. Lambda already supplies role credentials.
+      - id: c
+        text: Add a statement to the function's resource-based policy that allows DynamoDB access.
+        why: A function's resource-based policy controls who can invoke the function, not what the function can call.
+      - id: d
+        text: Attach the AdministratorAccess managed policy to the execution role for simplicity.
+        why: This works but violates least privilege; a bug or compromise could touch every resource in the account.
+    explanation: >-
+      The execution role is the function's identity. Scope it to the actions and resources the code uses.
+    sources:
+      - title: Defining Lambda function permissions with an execution role
+        url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html
+
+  - id: lambda-008
+    type: single
+    difficulty: medium
+    services: [lambda]
+    exam_domains: [DVA-C03-D3]
+    stem: >-
+      A team wants to send 10% of production traffic to a new version of a Lambda function and roll back quickly if
+      errors rise, without changing the API Gateway integration. What should they do?
+    options:
+      - id: a
+        text: >-
+          Publish the new version and update the alias that API Gateway invokes to route 10% of traffic to it.
+        correct: true
+        why: A weighted alias splits traffic between two published versions; rolling back is a single alias update.
+      - id: b
+        text: Point API Gateway at $LATEST and deploy the new code there.
+        why: $LATEST sends all traffic to the new code at once, and an alias can't route to $LATEST.
+      - id: c
+        text: Create a second function and use Route 53 weighted records to split traffic.
+        why: >-
+          This changes the integration and DNS, and duplicates configuration. Weighted aliases do this natively.
+      - id: d
+        text: Add an environment variable that turns the new code path on for 10% of requests.
+        why: >-
+          That is a hand-built feature flag. It changes the code under test and needs its own rollout and rollback.
+    explanation: >-
+      Weighted aliases are the canary mechanism behind SAM's DeploymentPreference and CodeDeploy rollouts for Lambda.
+    sources:
+      - title: Implement Lambda canary deployments using a weighted alias
+        url: https://docs.aws.amazon.com/lambda/latest/dg/configuring-alias-routing.html
+
+  - id: lambda-009
+    type: multiple
+    difficulty: medium
+    services: [lambda]
+    exam_domains: [DVA-C03-D1, DVA-C03-D4]
+    stem: >-
+      S3 invokes a function asynchronously. Some events fail every attempt because of bad input, and the team needs
+      to capture those events for later inspection. Which TWO options keep the failed events?
+    options:
+      - id: a
+        text: Configure an on-failure destination (for example an SQS queue) for asynchronous invocations.
+        correct: true
+        why: The destination receives a record of the failed invocation, including details of the error.
+      - id: b
+        text: Configure a dead-letter queue on the function.
+        correct: true
+        why: For asynchronous invocation, the function's dead-letter queue receives events that fail all attempts.
+      - id: c
+        text: Increase the event source mapping batch size.
+        why: S3 invokes asynchronously; there is no event source mapping to configure.
+      - id: d
+        text: Set the function's reserved concurrency to 0.
+        why: That throttles every invocation; it stops processing rather than capturing failures.
+      - id: e
+        text: Enable provisioned concurrency.
+        why: Provisioned concurrency affects cold starts, not error handling.
+    explanation: >-
+      After a function error, Lambda retries an asynchronous event twice. What still fails is discarded unless an
+      on-failure destination or a dead-letter queue is configured.
+    sources:
+      - title: How Lambda handles errors and retries with asynchronous invocation
+        url: https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html

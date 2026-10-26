@@ -1,0 +1,40 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { KB_DOMAINS } from '../../data/domains';
+import { conceptHref, getConcepts } from '../../lib/content';
+
+const concepts = await getConcepts();
+const live = new Map(concepts.map((c) => [c.data.service, c]));
+const total = KB_DOMAINS.reduce((n, d) => n + d.services.length, 0);
+---
+
+<BaseLayout title="Concepts" description="One page per AWS service, grouped by domain.">
+  <h1 class="text-2xl font-bold">Concepts</h1>
+  <p class="mt-2 text-slate-600 dark:text-slate-300">
+    One page per service, each following the same template. {concepts.length} of {total} pages live.
+  </p>
+  {
+    KB_DOMAINS.map((d) => (
+      <section class="mt-8">
+        <h2 class="text-lg font-semibold">{d.title}</h2>
+        <ul class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {d.services.map((s) => {
+            const page = live.get(s.slug);
+            return page ? (
+              <li>
+                <a href={conceptHref(page)} class="block h-full rounded-lg border border-slate-200 p-4 hover:border-brand-500 dark:border-slate-800">
+                  <span class="font-semibold">{page.data.title}</span>
+                  <span class="mt-1 block text-sm text-slate-600 dark:text-slate-400">{page.data.summary}</span>
+                </a>
+              </li>
+            ) : (
+              <li class="rounded-lg border border-dashed border-slate-300 p-4 text-slate-500 dark:border-slate-700">
+                {s.title} <span class="text-xs">(planned)</span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    ))
+  }
+</BaseLayout>

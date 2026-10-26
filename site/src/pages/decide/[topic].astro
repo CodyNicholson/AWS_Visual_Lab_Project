@@ -1,0 +1,19 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import VerifiedBadge from '../../components/VerifiedBadge.astro';
+
+export async function getStaticPaths() {
+  return (await getCollection('decide')).map((entry) => ({ params: { topic: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props as { entry: CollectionEntry<'decide'> };
+const { Content } = await render(entry);
+---
+
+<BaseLayout title={entry.data.title} description={entry.data.summary} searchable>
+  <h1 class="text-3xl font-bold tracking-tight">{entry.data.title}</h1>
+  <p class="mt-2 text-lg text-slate-600 dark:text-slate-300">{entry.data.summary}</p>
+  <div class="mt-3"><VerifiedBadge date={entry.data.last_verified} /></div>
+  <article class="prose prose-slate mt-8 max-w-none dark:prose-invert"><Content /></article>
+</BaseLayout>

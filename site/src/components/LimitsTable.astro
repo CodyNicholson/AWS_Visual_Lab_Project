@@ -1,0 +1,30 @@
+---
+import { getConceptByService } from '../lib/content';
+
+interface Props {
+  service: string;
+}
+const concept = await getConceptByService(Astro.props.service);
+if (!concept) throw new Error(`LimitsTable: no concept page for service "${Astro.props.service}"`);
+const { limits } = concept.data;
+---
+
+<div class="table-wrap not-prose my-6">
+  <table class="data-table">
+    <thead>
+      <tr><th scope="col">Limit or default</th><th scope="col">Value</th><th scope="col">Notes</th><th scope="col">Source</th></tr>
+    </thead>
+    <tbody>
+      {
+        limits.map((l) => (
+          <tr>
+            <th scope="row" class="!border-b !bg-transparent font-medium">{l.name}</th>
+            <td class="whitespace-nowrap font-mono">{l.value}</td>
+            <td>{l.note}</td>
+            <td><a class="text-brand-700 underline dark:text-brand-300" href={l.source}>AWS docs</a></td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>

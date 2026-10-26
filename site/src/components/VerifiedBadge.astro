@@ -1,0 +1,29 @@
+---
+import { MAX_AGE_DAYS, isStale, isoDate } from '../lib/freshness';
+
+interface Props {
+  date: Date;
+}
+const { date } = Astro.props;
+const iso = isoDate(date);
+const stale = isStale(date);
+---
+
+<span
+  class="verified-badge inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium data-[stale=true]:bg-amber-100 data-[stale=true]:text-amber-900 data-[stale=false]:bg-emerald-50 data-[stale=false]:text-emerald-800 dark:data-[stale=true]:bg-amber-500/20 dark:data-[stale=true]:text-amber-200 dark:data-[stale=false]:bg-emerald-500/15 dark:data-[stale=false]:text-emerald-300"
+  data-verified={iso}
+  data-stale={String(stale)}
+>
+  <span class="badge-label">{stale ? 'Needs review' : 'Verified'}</span>
+  <time datetime={iso}>{iso}</time>
+</span>
+
+<script define:vars={{ maxAge: MAX_AGE_DAYS }}>
+  // Recheck against today's date so a page built long ago still shows "Needs review".
+  document.querySelectorAll('.verified-badge').forEach((el) => {
+    const days = (Date.now() - Date.parse(el.dataset.verified)) / 86400000;
+    const stale = days > maxAge;
+    el.dataset.stale = String(stale);
+    el.querySelector('.badge-label').textContent = stale ? 'Needs review' : 'Verified';
+  });
+</script>

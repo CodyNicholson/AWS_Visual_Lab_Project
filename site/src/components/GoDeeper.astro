@@ -1,0 +1,40 @@
+---
+import { getCollection } from 'astro:content';
+import { PLANNED_SERVICES } from '../data/domains';
+import { conceptHref, getConceptByService, getConcepts } from '../lib/content';
+
+interface Props {
+  service: string;
+}
+const concept = await getConceptByService(Astro.props.service);
+if (!concept) throw new Error(`GoDeeper: no concept page for service "${Astro.props.service}"`);
+const live = new Map((await getConcepts()).map((c) => [c.data.service, c]));
+const related = concept.data.related.map((slug) => {
+  const page = live.get(slug);
+  return page ? { title: page.data.title, href: conceptHref(page) } : { title: PLANNED_SERVICES.get(slug)?.title ?? slug, href: null };
+});
+const caseStudies = (await getCollection('caseStudies')).filter((c) => c.data.services.includes(concept.data.service));
+const guides = (await getCollection('decide')).filter((d) => d.data.options.includes(concept.data.service));
+---
+
+<div class="grid gap-6 sm:grid-cols-2">
+  <section>
+    <h3>AWS documentation</h3>
+    <ul>{concept.data.sources.map((s) => <li><a href={s.url}>{s.title}</a></li>)}</ul>
+  </section>
+  <section>
+    <h3>Related pages</h3>
+    <ul>
+      {related.map((r) => <li>{r.href ? <a href={r.href}>{r.title}</a> : <span>{r.title} <em class="text-slate-500">(coming soon)</em></span>}</li>)}
+      {guides.map((g) => <li><a href={`/decide/${g.id}/`}>{g.data.title}</a></li>)}
+    </ul>
+  </section>
+  {
+    caseStudies.length > 0 && (
+      <section>
+        <h3>Case studies</h3>
+        <ul>{caseStudies.map((c) => <li><a href={`/case-studies/${c.id}/`}>{c.data.title}</a></li>)}</ul>
+      </section>
+    )
+  }
+</div>

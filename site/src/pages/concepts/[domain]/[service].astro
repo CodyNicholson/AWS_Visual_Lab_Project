@@ -1,0 +1,50 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ExamTags from '../../../components/ExamTags.astro';
+import VerifiedBadge from '../../../components/VerifiedBadge.astro';
+import CodeTabs from '../../../components/CodeTabs.astro';
+import LimitsTable from '../../../components/LimitsTable.astro';
+import MistakesTable from '../../../components/MistakesTable.astro';
+import CheckYourself from '../../../components/CheckYourself.astro';
+import GoDeeper from '../../../components/GoDeeper.astro';
+import { domainBySlug } from '../../../data/domains';
+import { getConcepts, type ConceptEntry } from '../../../lib/content';
+
+export async function getStaticPaths() {
+  return (await getConcepts()).map((entry) => {
+    const [domain, service] = entry.id.split('/');
+    return { params: { domain, service }, props: { entry } };
+  });
+}
+
+const { entry } = Astro.props as { entry: ConceptEntry };
+const { Content } = await render(entry);
+const d = entry.data;
+const domain = domainBySlug(d.domain)!;
+// Components available in every concept MDX file without an import.
+const components = { CodeTabs, LimitsTable, MistakesTable, CheckYourself, GoDeeper };
+---
+
+<BaseLayout title={d.title} description={d.summary} searchable>
+  <nav aria-label="Breadcrumb" class="text-sm text-slate-500">
+    <a href="/concepts/" class="underline">Concepts</a> / {domain.title}
+  </nav>
+  <header class="mt-3 border-b border-slate-200 pb-6 dark:border-slate-800">
+    <h1 class="text-3xl font-bold tracking-tight">{d.title}</h1>
+    <p class="mt-2 text-lg text-slate-600 dark:text-slate-300">{d.summary}</p>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <ExamTags exams={d.exams} examDomains={d.exam_domains} tasks={d.tasks} />
+      <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium capitalize dark:bg-slate-800">{d.difficulty}</span>
+      <VerifiedBadge date={d.last_verified} />
+    </div>
+    <div hidden>
+      {d.exams.map((e) => <span data-pagefind-filter="exam">{e}</span>)}
+      <span data-pagefind-filter="domain">{domain.title}</span>
+      <span data-pagefind-filter="service">{d.title}</span>
+    </div>
+  </header>
+  <article class="prose prose-slate mt-8 max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-a:text-brand-700 dark:prose-a:text-brand-300 prose-pre:p-0 prose-code:before:content-none prose-code:after:content-none">
+    <Content components={components} />
+  </article>
+</BaseLayout>

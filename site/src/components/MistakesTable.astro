@@ -1,0 +1,47 @@
+---
+import { getConceptByService } from '../lib/content';
+
+interface Props {
+  service: string;
+}
+const concept = await getConceptByService(Astro.props.service);
+if (!concept) throw new Error(`MistakesTable: no concept page for service "${Astro.props.service}"`);
+const severityClass = {
+  high: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200',
+  medium: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200',
+  low: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+};
+---
+
+<div class="table-wrap not-prose my-6">
+  <table class="data-table min-w-[48rem]">
+    <thead>
+      <tr><th scope="col">Mistake</th><th scope="col">Symptom you see</th><th scope="col">Why it happens</th><th scope="col">Fix</th></tr>
+    </thead>
+    <tbody>
+      {
+        concept.data.mistakes.map((m) => (
+          <tr>
+            <th scope="row" class="!bg-transparent font-medium">
+              <span class={`mb-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ${severityClass[m.severity]}`}>{m.severity}</span>
+              <span class="block">{m.mistake}</span>
+            </th>
+            <td>
+              {m.symptom}
+              {m.errors.map((e) => (
+                <code class="mt-1 block break-words rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-ink-800">{e}</code>
+              ))}
+            </td>
+            <td>{m.why}</td>
+            <td>
+              {m.fix}{' '}
+              <a class="whitespace-nowrap text-brand-700 underline dark:text-brand-300" href={m.source.url} title={m.source.title}>
+                Source
+              </a>
+            </td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>

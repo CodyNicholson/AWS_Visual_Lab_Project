@@ -1,0 +1,243 @@
+---
+title: AWS Lambda
+service: lambda
+summary: Run code in response to events without managing servers; you pay for requests and compute time, and Lambda scales each function for you.
+domain: compute-and-containers
+exams: [DVA-C03]
+exam_domains: [DVA-C03-D1, DVA-C03-D3, DVA-C03-D4]
+tasks: [] # task statement IDs are added when the DVA-C03 exam guide publishes (Oct 27, 2026)
+difficulty: associate
+last_verified: 2026-10-23
+related: [sqs, api-gateway, dynamodb, step-functions, ecs-fargate, iam, cloudwatch, x-ray]
+compare_with:
+  - label: Lambda vs Fargate vs ECS on EC2
+    href: /decide/
+sources:
+  - title: Lambda quotas
+    url: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - title: Understanding Lambda function scaling (concurrency)
+    url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html
+  - title: Best practices for working with Lambda functions
+    url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - title: Creating and configuring an Amazon SQS event source mapping
+    url: https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html
+  - title: Handling errors for an SQS event source in Lambda
+    url: https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-errorhandling.html
+  - title: How Lambda handles errors and retries with asynchronous invocation
+    url: https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html
+  - title: Implement Lambda canary deployments using a weighted alias
+    url: https://docs.aws.amazon.com/lambda/latest/dg/configuring-alias-routing.html
+  - title: Defining Lambda function permissions with an execution role
+    url: https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html
+  - title: Enable internet access for VPC-connected Lambda functions
+    url: https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc-internet.html
+  - title: Use Lambda recursive loop detection to prevent infinite loops
+    url: https://docs.aws.amazon.com/lambda/latest/dg/invocation-recursion.html
+limits:
+  - name: Function timeout
+    value: 3 s default, 900 s max
+    note: Set in 1-second increments. Lambda Managed Instances allow up to 90 minutes for asynchronous and most event source mapping invocations.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/configuration-timeout.html
+  - name: Memory
+    value: 128–10,240 MB
+    note: 1-MB increments. CPU scales with memory; 1,769 MB is the equivalent of one vCPU.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - name: Invocation payload (synchronous)
+    value: 6 MB request, 6 MB response
+    note: Streamed responses can be up to 200 MB.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - name: Invocation payload (asynchronous)
+    value: 1 MB
+    source: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - name: Environment variables
+    value: 4 KB total
+    note: All variables on the function, combined.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - name: Deployment package (.zip)
+    value: 50 MB zipped, 250 MB unzipped
+    note: The unzipped limit includes layers and custom runtimes. Upload larger zips through S3; container images can be up to 10 GB.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - name: Layers per function
+    value: '5'
+    source: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - name: /tmp storage
+    value: 512–10,240 MB
+    source: https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+  - name: Concurrent executions per Region
+    value: 1,000 default
+    note: A soft quota. Lambda always keeps 100 units unreserved for functions without reserved concurrency.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html
+  - name: Scaling rate per function
+    value: 1,000 environments / 10 s
+    source: https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html
+  - name: Async retries on function error
+    value: 2 retries
+    note: 1 minute, then 2 minutes apart. Throttles and 5xx system errors are retried for up to 6 hours by default.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html
+  - name: SQS batch size
+    value: Up to 10,000 (standard), 10 (FIFO)
+    note: Batches over 10 also need a batching window of at least 1 second.
+    source: https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html
+mistakes:
+  - mistake: SDK clients and connections created inside the handler
+    symptom: Every invocation pays for client setup and a new TLS connection; latency and duration (cost) climb under load.
+    why: Code inside the handler runs on every invocation; code outside it runs once per execution environment.
+    fix: Create SDK clients and database connections at module scope so warm invocations reuse them. Keep per-request user data out of module scope.
+    severity: medium
+    source:
+      title: Lambda best practices — take advantage of execution environment reuse
+      url: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  - mistake: SQS visibility timeout shorter than six times the function timeout
+    symptom: The same message is processed twice and duplicates show up downstream, especially when the function is throttled.
+    why: A message reappears on the queue when its visibility timeout ends, even if a retry of the batch is still pending.
+    fix: Set the queue's visibility timeout to at least 6× the function timeout (plus any batching window), make the handler idempotent, and add a dead-letter queue with maxReceiveCount of at least 5.
+    severity: high
+    source:
+      title: Configuring a queue to use with Lambda
+      url: https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html
+  - mistake: One bad message fails the whole SQS batch
+    symptom: Messages that already succeeded are processed again; a single poison message keeps a full batch cycling until it reaches the dead-letter queue.
+    why: Without partial batch responses, any error, including an exception thrown from the handler, returns every message in the batch to the queue.
+    fix: Enable ReportBatchItemFailures on the event source mapping, catch errors per record, and return the failed message IDs in batchItemFailures instead of throwing.
+    severity: high
+    source:
+      title: Implementing partial batch responses
+      url: https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-errorhandling.html
+  - mistake: Function attached to a VPC with no route to AWS APIs or the internet
+    symptom: Calls to S3, DynamoDB or external APIs hang until the function times out.
+    errors: ['Task timed out after 3.01 seconds']
+    why: A VPC-attached function only reaches what the VPC can reach, and a public subnet does not give a Lambda function internet access.
+    fix: Put the function in private subnets and add VPC endpoints (a gateway endpoint for S3 or DynamoDB, interface endpoints for other services) or a NAT gateway.
+    severity: high
+    source:
+      title: Enable internet access for VPC-connected Lambda functions
+      url: https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc-internet.html
+  - mistake: Default 3-second timeout left in place
+    symptom: Intermittent failures when a downstream call or a large S3 download runs long.
+    errors: ['Task timed out after 3.00 seconds']
+    why: The timeout defaults to 3 seconds, and tests often use small payloads that never get near it.
+    fix: Load test with realistic data sizes, set the timeout with headroom above observed duration, and set client-side timeouts on downstream calls shorter than the function timeout.
+    severity: medium
+    source:
+      title: Configure Lambda function timeout
+      url: https://docs.aws.amazon.com/lambda/latest/dg/configuration-timeout.html
+  - mistake: Handler that isn't idempotent
+    symptom: Double charges, duplicate emails or duplicate rows after retries.
+    why: Event source mappings and asynchronous invocation deliver at least once; the same event can arrive more than once even without an error.
+    fix: Make writes conditional (for example DynamoDB attribute_not_exists) or record processed event IDs. Powertools for AWS Lambda has an idempotency utility.
+    severity: high
+    source:
+      title: How Lambda handles errors and retries with asynchronous invocation
+      url: https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html
+  - mistake: Function writes back to the resource that triggers it
+    symptom: Invocations and cost spike; the function uses up the account's concurrency.
+    errors: [RecursiveInvocationException]
+    why: For example, an S3-triggered function writes its output to the same bucket, or an SQS consumer re-sends to its own queue.
+    fix: Write to a different bucket, prefix or queue. Lambda stops loops through SQS, S3, SNS and EventBridge custom buses after about 16 invocations, but not loops through services like DynamoDB; set reserved concurrency to 0 to stop a runaway function immediately.
+    severity: high
+    source:
+      title: Use Lambda recursive loop detection to prevent infinite loops
+      url: https://docs.aws.amazon.com/lambda/latest/dg/invocation-recursion.html
+---
+
+## When to use it / when not to
+
+**Use Lambda when:**
+
+- Work arrives as events: an HTTP request through API Gateway, a message on a queue, an object landing in S3, a schedule.
+- Traffic is spiky or unpredictable, and you'd rather pay per request than for idle servers.
+- Each unit of work finishes in well under 15 minutes and fits in up to 10 GB of memory.
+- You want to glue AWS services together with a small amount of code.
+
+**Look elsewhere when:**
+
+- Work runs longer than 15 minutes, or needs a long-lived process or open connections: use ECS on Fargate, or Step Functions to split the work into steps.
+- Traffic is steady and high around the clock. Containers or EC2 are often cheaper at a constant load.
+- You need GPUs, or control over the operating system.
+- You need consistently low latency and can't tolerate any cold starts, and provisioned concurrency doesn't fit the budget.
+
+**Compare with:** ECS on Fargate for containers without servers, and Step Functions for orchestrating many Lambda calls. A "Lambda vs Fargate vs ECS on EC2" decision guide is coming in Phase 2.
+
+## How it works
+
+```mermaid
+flowchart LR
+  accTitle: Lambda invocation types
+  accDescr: API Gateway invokes Lambda synchronously, S3 and SNS invoke it asynchronously through an internal queue, and an event source mapping polls SQS and invokes the function with batches.
+  APIGW[API Gateway] -- synchronous --> FN
+  S3[S3 / SNS] -- asynchronous --> AQ[(Lambda's internal event queue)] --> FN
+  SQS[(SQS queue)] -. polled by .-> ESM[Event source mapping] -- batch --> FN
+  subgraph FN[Lambda function]
+    direction TB
+    INIT[Init: code outside the handler, once per environment] --> INV[Invoke: handler, once per event]
+  end
+```
+
+**Execution environments.** Lambda runs each function in isolated execution environments. The first request to a new environment runs the *Init* phase: the runtime starts and your code outside the handler runs. That's a cold start. Then the *Invoke* phase runs your handler. Later requests can reuse the warm environment and skip Init. That is why SDK clients belong at module scope, and why module-level state must never hold one user's data for the next.
+
+**Three ways to invoke.** In a *synchronous* call (API Gateway, the SDK's `Invoke` with `RequestResponse`), the caller waits and handles errors itself. In an *asynchronous* call (S3, SNS, `InvocationType=Event`), Lambda queues the event, returns `202`, and retries a function error twice. Add an on-failure destination or a dead-letter queue to keep what still fails. With an *event source mapping* (SQS, Kinesis, DynamoDB Streams), Lambda polls the source and invokes your function with batches. Retries then follow the source's rules; for SQS that means the visibility timeout and the queue's redrive policy.
+
+**Concurrency.** Concurrency is the number of requests in flight at once: *average requests per second × average duration in seconds*. A function averaging 200 ms at 5,000 requests per second needs a concurrency of 1,000, the default Regional quota. *Reserved concurrency* guarantees a function a share of that pool and also caps it there. *Provisioned concurrency* keeps environments initialized ahead of time, which removes cold starts at extra cost.
+
+**Versions and aliases.** Publishing a version freezes the code and configuration. An alias such as `live` points at a version and can split traffic between two versions, for example 90/10, for canary releases. Both versions must be published (an alias can't point at `$LATEST`) and share the same execution role. AWS SAM's `DeploymentPreference` uses this with CodeDeploy for gradual rollouts.
+
+The Lambda docs now call standard functions **Event Functions**, to tell them apart from the newer Lambda Web Functions and Lambda MicroVMs. This page covers Event Functions, which is what the exam and most code mean by "a Lambda function".
+
+## Code
+
+An SQS-triggered worker that records orders in DynamoDB. It shows the patterns from this page: clients at module scope, a partial batch response, and an idempotent conditional write. Credentials come from the function's execution role, so there are no access keys anywhere. CI tests both handlers, and the CDK stack is deployed and checked in a sandbox account.
+
+<CodeTabs
+  caption="Python and TypeScript do the same thing; the CDK stack wires the queue, function and table together."
+  tabs={[
+    { label: 'Python (boto3)', path: 'lambda/python/order_worker/handler.py' },
+    { label: 'TypeScript (SDK v3)', path: 'lambda/typescript/order-worker.ts' },
+    { label: 'CDK', path: 'lambda/cdk/order-worker-stack.ts' },
+  ]}
+/>
+
+## Key limits and defaults
+
+<LimitsTable service="lambda" />
+
+## Common mistakes
+
+<MistakesTable service="lambda" />
+
+## Security and cost notes
+
+**Least privilege.** Give each function its own execution role with only the actions it calls, scoped to the resources it touches. The order worker can only put items into one table:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "dynamodb:PutItem",
+      "Resource": "arn:aws:dynamodb:us-east-1:111122223333:table/Orders"
+    }
+  ]
+}
+```
+
+The execution role controls what the function can do. The function's *resource-based policy* controls who can invoke it. Lambda supplies the role's temporary credentials automatically, so never put access keys in environment variables. Keep secrets in Secrets Manager or Parameter Store, and fetch and cache them at Init.
+
+**Networking.** Attach a function to a VPC only when it needs private resources such as an RDS database or ElastiCache. When you do, use private subnets and add VPC endpoints for the AWS services it calls.
+
+**Logs and data.** Log message IDs, not message bodies or prompts, which can contain customer data. CloudWatch Logs data protection can mask sensitive fields that slip through.
+
+**What surprises the bill:**
+
+- *Recursive loops.* A function that writes to its own trigger can run up charges in minutes.
+- *Provisioned concurrency.* You pay for it while it is configured, whether or not it is used.
+- *Log retention.* A log group created without a retention period keeps logs, and bills for them, forever. Set a retention period, as the CDK sample does.
+- *Over-sized memory.* Duration is billed in proportion to memory. Measure with the `Max Memory Used` field in the `REPORT` log line before you size up, or use AWS Lambda Power Tuning.
+
+## Check yourself
+
+<CheckYourself service="lambda" count={5} />
+
+## Go deeper
+
+<GoDeeper service="lambda" />

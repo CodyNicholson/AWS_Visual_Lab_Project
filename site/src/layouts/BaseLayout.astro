@@ -1,0 +1,112 @@
+---
+import '../styles/global.css';
+import Mermaid from '../components/Mermaid.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Mark the main content for Pagefind indexing (concept, decide, case-study, exam and mistakes pages). */
+  searchable?: boolean;
+}
+
+const { title, description = 'AWS developer knowledge base: services, exam prep and case studies.', searchable = false } = Astro.props;
+const fullTitle = title === 'AWS Dev KB' ? title : `${title} · AWS Dev KB`;
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/concepts/', label: 'Concepts' },
+  { href: '/decide/', label: 'Decide' },
+  { href: '/exams/', label: 'Exams' },
+  { href: '/case-studies/', label: 'Case studies' },
+  { href: '/mistakes/', label: 'Mistakes' },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>{fullTitle}</title>
+    <script is:inline>
+      (function () {
+        var theme = null;
+        try { theme = localStorage.getItem('theme'); } catch (e) {}
+        var dark = theme ? theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', dark);
+      })();
+    </script>
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <a href="#main" class="sr-only z-50 rounded bg-brand-600 px-3 py-2 text-white focus:not-sr-only focus:absolute focus:left-4 focus:top-4">
+      Skip to content
+    </a>
+    <header class="border-b border-slate-200 dark:border-slate-800">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+        <a href="/" class="font-semibold tracking-tight">
+          <span class="text-brand-600 dark:text-brand-300">AWS</span> Dev KB
+        </a>
+        <nav aria-label="Main" class="order-3 w-full overflow-x-auto sm:order-none sm:w-auto">
+          <ul class="flex gap-4 text-sm">
+            {
+              nav.map((item) => (
+                <li>
+                  <a
+                    href={item.href}
+                    aria-current={path.startsWith(item.href) ? 'page' : undefined}
+                    class="whitespace-nowrap text-slate-600 hover:text-slate-900 aria-[current=page]:font-semibold aria-[current=page]:text-slate-900 dark:text-slate-400 dark:hover:text-white dark:aria-[current=page]:text-white"
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        <div class="ml-auto flex items-center gap-2">
+          <a href="/search/" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-ink-900">
+            Search
+          </a>
+          <button
+            id="theme-toggle"
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700"
+            aria-label="Toggle dark theme"
+            aria-pressed="false"
+          >
+            <span class="dark:hidden">Dark</span><span class="hidden dark:inline">Light</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" class="mx-auto w-full max-w-6xl flex-1 px-4 py-8" data-pagefind-body={searchable ? '' : undefined}>
+      <slot />
+    </main>
+
+    <footer class="border-t border-slate-200 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+      <div class="mx-auto max-w-6xl px-4 py-6">
+        Independent study material, not affiliated with AWS. Practice questions are original and are not taken from
+        live exams. Facts link to the AWS documentation they came from; check the "last verified" date on each page.
+      </div>
+    </footer>
+
+    <Mermaid />
+    <script>
+      const toggle = document.getElementById('theme-toggle')!;
+      const sync = () => toggle.setAttribute('aria-pressed', String(document.documentElement.classList.contains('dark')));
+      sync();
+      toggle.addEventListener('click', () => {
+        const dark = document.documentElement.classList.toggle('dark');
+        try {
+          localStorage.setItem('theme', dark ? 'dark' : 'light');
+        } catch {
+          /* storage unavailable: theme still applies for this page view */
+        }
+        sync();
+        document.dispatchEvent(new CustomEvent('themechange'));
+      });
+    </script>
+  </body>
+</html>

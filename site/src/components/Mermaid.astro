@@ -1,0 +1,28 @@
+---
+// Renders ```mermaid fences client-side. The mermaid bundle is only fetched on pages that have a diagram.
+// Authors give each diagram accTitle/accDescr lines; mermaid turns them into the SVG's <title>/<desc>.
+---
+
+<script>
+  const blocks = Array.from(document.querySelectorAll<HTMLElement>('pre.mermaid, pre[data-language="mermaid"], pre > code.language-mermaid'));
+  if (blocks.length) {
+    const targets = blocks.map((el) => {
+      const pre = el.tagName === 'PRE' ? el : el.parentElement!;
+      const figure = document.createElement('figure');
+      figure.className = 'mermaid-diagram my-6 overflow-x-auto rounded-lg border border-slate-200 p-4 dark:border-slate-800';
+      figure.dataset.source = pre.textContent ?? '';
+      pre.replaceWith(figure);
+      return figure;
+    });
+    const { default: mermaid } = await import('mermaid');
+    const render = async () => {
+      mermaid.initialize({ startOnLoad: false, theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default' });
+      for (const [i, fig] of targets.entries()) {
+        const { svg } = await mermaid.render(`mermaid-${i}-${Date.now()}`, fig.dataset.source!);
+        fig.innerHTML = svg;
+      }
+    };
+    await render();
+    document.addEventListener('themechange', render);
+  }
+</script>

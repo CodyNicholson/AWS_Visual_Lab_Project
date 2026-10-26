@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SearchBox from '../components/SearchBox.astro';
+---
+
+<BaseLayout title="Search" description="Search the AWS Dev KB by service, exam or error message.">
+  <h1 class="text-2xl font-bold">Search</h1>
+  <p class="mt-2 text-slate-600 dark:text-slate-300">
+    Filter by exam, domain or service. Pasting an error message such as <code>Task timed out after 3.00 seconds</code>
+    finds the common mistake that causes it.
+  </p>
+  <div class="mt-6"><SearchBox autofocus /></div>
+</BaseLayout>

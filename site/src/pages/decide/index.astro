@@ -1,0 +1,29 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EmptyState from '../../components/EmptyState.astro';
+
+const guides = await getCollection('decide');
+---
+
+<BaseLayout title="Decision guides" description="Side-by-side guides for choosing between similar AWS services.">
+  <h1 class="text-2xl font-bold">Decision guides</h1>
+  <p class="mt-2 text-slate-600 dark:text-slate-300">Where exam questions and real projects both get stuck: which of two or three similar services to pick.</p>
+  {
+    guides.length ? (
+      <ul class="mt-6 space-y-3">
+        {guides.map((g) => (
+          <li>
+            <a class="font-semibold underline" href={`/decide/${g.id}/`}>{g.data.title}</a>
+            <p class="text-sm text-slate-600 dark:text-slate-400">{g.data.summary}</p>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <EmptyState title="First guides coming in Phase 2">
+        SQS vs SNS vs EventBridge vs Kinesis, Lambda vs Fargate vs ECS on EC2, SAM vs CDK vs CloudFormation, and Secrets
+        Manager vs Parameter Store.
+      </EmptyState>
+    )
+  }
+</BaseLayout>

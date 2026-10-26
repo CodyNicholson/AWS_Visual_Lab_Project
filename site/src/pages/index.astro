@@ -1,0 +1,70 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SearchBox from '../components/SearchBox.astro';
+import { KB_DOMAINS } from '../data/domains';
+import { conceptHref, examSlug, getConcepts } from '../lib/content';
+
+const live = new Map((await getConcepts()).map((c) => [c.data.service, c]));
+const exams = await getCollection('exams');
+---
+
+<BaseLayout title="AWS Dev KB">
+  <section class="mx-auto max-w-3xl py-6 text-center">
+    <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Learn, look up and practise AWS development</h1>
+    <p class="mt-3 text-lg text-slate-600 dark:text-slate-300">
+      What each service is, when to pick it, how to call it from code, and where people go wrong.
+    </p>
+    <div class="mt-6 text-left"><SearchBox /></div>
+  </section>
+
+  <section class="mt-10" aria-labelledby="by-exam">
+    <h2 id="by-exam" class="text-xl font-semibold">Start by exam</h2>
+    <ul class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        exams.map((e) => (
+          <li>
+            <a href={`/exams/${examSlug(e.data.code)}/`} class="block h-full rounded-lg border border-slate-200 p-4 hover:border-brand-500 dark:border-slate-800">
+              <span class="font-mono text-sm text-brand-700 dark:text-brand-300">{e.data.code}</span>
+              <span class="mt-1 block font-semibold">{e.data.name}</span>
+              <span class="mt-1 block text-sm text-slate-600 dark:text-slate-400">{e.data.summary}</span>
+            </a>
+          </li>
+        ))
+      }
+      <li class="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-slate-700">
+        AIP-C01 and DOP-C02 hubs are planned for Phase 2.
+      </li>
+    </ul>
+  </section>
+
+  <section class="mt-10" aria-labelledby="by-service">
+    <h2 id="by-service" class="text-xl font-semibold">Start by service</h2>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        KB_DOMAINS.map((d) => (
+          <section class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+            <h3 class="font-semibold">{d.title}</h3>
+            <p class="text-xs text-slate-500">{d.examTags.join(' · ')}</p>
+            <ul class="mt-2 space-y-1 text-sm">
+              {d.services.map((s) => {
+                const page = live.get(s.slug);
+                return (
+                  <li>
+                    {page ? (
+                      <a class="text-brand-700 underline dark:text-brand-300" href={conceptHref(page)}>
+                        {s.title}
+                      </a>
+                    ) : (
+                      <span class="text-slate-500">{s.title}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>

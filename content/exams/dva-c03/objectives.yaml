@@ -1,0 +1,26 @@
+exam: DVA-C03
+status: provisional
+status_note: >-
+  Domains and weights come from AWS's September 2026 announcement. Task statements are published with the full exam
+  guide on October 27, 2026; until they are loaded here, pages and questions are tagged by domain only. AWS has
+  announced one new task, Task 2.3 (AI security, 5 skills), which will be added with the rest.
+domains:
+  - id: DVA-C03-D1
+    number: 1
+    name: Development with AWS Services
+    weight: 30
+  - id: DVA-C03-D2
+    number: 2
+    name: Security
+    weight: 26
+  - id: DVA-C03-D3
+    number: 3
+    name: Testing and Deployment
+    weight: 22
+  - id: DVA-C03-D4
+    number: 4
+    name: Troubleshooting and Optimization
+    weight: 22
+sources:
+  - title: AWS Training and Certification blog — Certification updates, September 2026
+    url: https://aws.amazon.com/blogs/training-and-certification/september-2026-new-offerings/

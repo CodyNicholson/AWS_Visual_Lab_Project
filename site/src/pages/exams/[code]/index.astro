@@ -1,0 +1,144 @@
+---
+import { getCollection, getEntry, type CollectionEntry } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { computeCoverage, MIN_QUESTIONS_PER_TASK } from '../../../lib/coverage';
+import { conceptHref, getConcepts, getQuestions } from '../../../lib/content';
+import { isoDate } from '../../../lib/freshness';
+
+export async function getStaticPaths() {
+  return (await getCollection('exams')).map((exam) => ({ params: { code: exam.id }, props: { exam } }));
+}
+
+const { exam } = Astro.props as { exam: CollectionEntry<'exams'> };
+const e = exam.data;
+const objectives = (await getEntry('objectives', exam.id))!.data;
+const concepts = (await getConcepts()).filter((c) => c.data.exams.includes(e.code));
+const questions = await getQuestions(e.code);
+const coverage = computeCoverage(
+  objectives,
+  concepts.map((c) => ({ id: c.data.service, exam_domains: c.data.exam_domains, tasks: c.data.tasks })),
+  questions,
+);
+const pageBySlug = new Map(concepts.map((c) => [c.data.service, c]));
+const fmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' });
+---
+
+<BaseLayout title={`${e.code} hub`} description={e.summary} searchable>
+  <p class="font-mono text-sm text-brand-700 dark:text-brand-300">{e.code}</p>
+  <h1 class="text-3xl font-bold tracking-tight">{e.name}</h1>
+  <p class="mt-2 text-lg text-slate-600 dark:text-slate-300">{e.summary}</p>
+
+  <section class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Exam format">
+    <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+      <p class="text-sm text-slate-500">Duration</p>
+      <p class="text-xl font-semibold">{e.format.duration_minutes} minutes</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+      <p class="text-sm text-slate-500">Questions</p>
+      <p class="text-xl font-semibold">{e.format.questions_total} <span class="text-sm font-normal">({e.format.questions_scored} scored)</span></p>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+      <p class="text-sm text-slate-500">Passing score</p>
+      <p class="text-xl font-semibold">{e.format.passing_score} <span class="text-sm font-normal">of {e.format.score_scale[1].toLocaleString('en-US')}</span></p>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+      <p class="text-sm text-slate-500">Objective coverage</p>
+      <p class="text-xl font-semibold">{coverage.percent === null ? 'Pending' : `${coverage.percent}%`}</p>
+      <p class="text-xs text-slate-500">
+        {coverage.percent === null ? 'Task statements not yet published' : `${coverage.coveredTasks} of ${coverage.taskCount} task statements`}
+      </p>
+    </div>
+  </section>
+
+  {
+    e.dates.length > 0 && (
+      <section class="mt-6">
+        <h2 class="text-lg font-semibold">Key dates</h2>
+        <ul class="mt-2 text-sm">
+          {e.dates.map((d) => (
+            <li>
+              <time datetime={isoDate(d.date)} class="font-medium">{fmt.format(d.date)}</time>: {d.label}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  <div class="mt-6 flex flex-wrap gap-3">
+    <a href={`/exams/${exam.id}/practice/`} class="rounded-md bg-brand-600 px-4 py-2 font-medium text-white">Practice questions ({questions.length})</a>
+  </div>
+
+  <section class="mt-10" aria-labelledby="objective-map">
+    <h2 id="objective-map" class="text-xl font-semibold">Objective map</h2>
+    {
+      objectives.status === 'provisional' && (
+        <p class="mt-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+          <strong>Provisional.</strong> {objectives.status_note}
+        </p>
+      )
+    }
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      A task statement counts as covered when at least one concept page teaches it and at least {MIN_QUESTIONS_PER_TASK} practice
+      questions test it. Coverage is recalculated on every build.
+    </p>
+    <div class="mt-4 space-y-6">
+      {
+        coverage.domains.map((d) => (
+          <section class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+            <h3 class="font-semibold">
+              Domain {d.number}: {d.name} <span class="font-normal text-slate-500">({d.weight}% of scored content)</span>
+            </h3>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              {d.pages.length} concept {d.pages.length === 1 ? 'page' : 'pages'} · {d.questions.length} {d.questions.length === 1 ? 'question' : 'questions'}
+            </p>
+            {d.pages.length > 0 && (
+              <ul class="mt-2 flex flex-wrap gap-2 text-sm">
+                {d.pages.map((slug) => {
+                  const page = pageBySlug.get(slug)!;
+                  return (
+                    <li>
+                      <a class="rounded-full border border-slate-300 px-2.5 py-0.5 hover:border-brand-500 dark:border-slate-700" href={conceptHref(page)}>
+                        {page.data.title}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {d.tasks.length > 0 && (
+              <div class="table-wrap mt-3">
+                <table class="data-table">
+                  <thead>
+                    <tr><th scope="col">Task</th><th scope="col">Pages</th><th scope="col">Questions</th><th scope="col">Status</th></tr>
+                  </thead>
+                  <tbody>
+                    {d.tasks.map((t) => (
+                      <tr>
+                        <td><span class="font-mono text-xs">{t.id}</span> {t.title}</td>
+                        <td>{t.pages.length}</td>
+                        <td>{t.questions.length}</td>
+                        <td class={t.covered ? 'text-emerald-700 dark:text-emerald-300' : 'font-semibold text-red-700 dark:text-red-300'}>
+                          {t.covered ? 'Covered' : 'Gap'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mt-10 text-sm text-slate-600 dark:text-slate-400">
+    <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Where these facts come from</h2>
+    <p class="mt-1">Checked on {isoDate(e.verified.on)} against:</p>
+    <ul class="mt-1 list-disc pl-5">
+      {e.verified.against.map((s) => <li><a class="underline" href={s.url}>{s.title}</a></li>)}
+    </ul>
+    {e.verified.notes && <p class="mt-2">{e.verified.notes}</p>}
+  </section>
+</BaseLayout>

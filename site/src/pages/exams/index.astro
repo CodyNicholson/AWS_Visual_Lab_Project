@@ -1,0 +1,24 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { examSlug } from '../../lib/content';
+
+const exams = await getCollection('exams');
+---
+
+<BaseLayout title="Exams" description="Certification hubs: objective maps, practice questions and study plans.">
+  <h1 class="text-2xl font-bold">Exams</h1>
+  <ul class="mt-6 grid gap-4 sm:grid-cols-2">
+    {
+      exams.map((e) => (
+        <li>
+          <a href={`/exams/${examSlug(e.data.code)}/`} class="block rounded-lg border border-slate-200 p-4 hover:border-brand-500 dark:border-slate-800">
+            <span class="font-mono text-sm text-brand-700 dark:text-brand-300">{e.data.code}</span>
+            <span class="mt-1 block font-semibold">{e.data.name}</span>
+            <span class="mt-1 block text-sm text-slate-600 dark:text-slate-400">{e.data.summary}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</BaseLayout>

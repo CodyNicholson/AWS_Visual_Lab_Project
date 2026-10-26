@@ -1,0 +1,36 @@
+code: DVA-C03
+name: AWS Certified Developer – Associate
+level: associate
+status: upcoming
+summary: >-
+  The core developer exam. DVA-C03 replaces DVA-C02 on December 1, 2026 and brings containers, Amazon Bedrock and
+  AI security into scope.
+format:
+  duration_minutes: 130
+  questions_total: 65
+  questions_scored: 50
+  passing_score: 720
+  score_scale: [100, 1000]
+  question_types: [multiple choice, multiple response]
+dates:
+  - label: DVA-C03 registration opens; full exam guide with task statements published
+    date: 2026-10-27
+  - label: Last day to take DVA-C02
+    date: 2026-11-30
+  - label: DVA-C03 delivery begins
+    date: 2026-12-01
+# The DVA-C03 guide isn't published yet. Add its pages here once it is (expected under
+# https://docs.aws.amazon.com/aws-certification/latest/, following the DVA-C02 URL pattern), and the
+# weekly freshness job starts diffing them.
+guide_urls: []
+verified:
+  on: 2026-10-23
+  against:
+    - title: AWS Training and Certification blog — Certification updates, September 2026
+      url: https://aws.amazon.com/blogs/training-and-certification/september-2026-new-offerings/
+    - title: AWS Certified Developer – Associate (DVA-C02) exam guide (response types, 100–1,000 scale)
+      url: https://docs.aws.amazon.com/aws-certification/latest/developer-associate-02/developer-associate-02.html
+  notes: >-
+    Duration, question counts, passing score and dates are from the September 2026 announcement. The 100–1,000 score
+    scale and the two response types are from the DVA-C02 guide and should be re-checked against the DVA-C03 guide
+    when it publishes.

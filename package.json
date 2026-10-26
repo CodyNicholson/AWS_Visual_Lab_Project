@@ -1,0 +1,31 @@
+{
+  "name": "aws-dev-kb",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "site",
+    "infra",
+    "samples"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w site",
+    "build": "npm run build -w site",
+    "check:content": "tsx scripts/check-content.ts",
+    "check:links": "tsx scripts/check-links.ts site/dist",
+    "coverage": "tsx scripts/coverage-report.ts",
+    "exam-guide-diff": "tsx scripts/exam-guide-diff.ts",
+    "test": "npm test -w samples && npm test -w infra",
+    "ci": "npm run check:content && npm run typecheck && npm test && npm run build && npm run check:links",
+    "typecheck": "npm run typecheck -w site && npm run typecheck -w samples && npm run typecheck -w infra",
+    "test:python": "scripts/pytest.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "yaml": "^2.8.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
